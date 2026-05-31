@@ -1,4 +1,4 @@
-package com.example.belajar_flutter
+package com.mobileanget.medtrans
 
 import io.flutter.embedding.android.FlutterActivity
 
