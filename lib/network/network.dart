@@ -10,7 +10,7 @@ class NetworkUrl {
   static String get baseAuthUrl {
     final override = _wsBaseUrlOverride.trim();
     if (override.isNotEmpty) return override;
-    return 'http://localhost:4002';
+    return 'https://web-service-medfo.medtrans.id';
   }
 
   static const String baseCmsUrl = 'https://api-dev-cms.medtrans.id';
