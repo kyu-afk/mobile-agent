@@ -1,0 +1,186 @@
+// lib/services/session_guard.dart
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../pages/login_page.dart';
+import 'auth_service.dart';
+
+class SessionGuard extends StatefulWidget {
+  final Widget child;
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  const SessionGuard({super.key, required this.child, required this.navigatorKey});
+
+  @override
+  State<SessionGuard> createState() => _SessionGuardState();
+}
+
+class _SessionGuardState extends State<SessionGuard> with WidgetsBindingObserver {
+  static const Duration _idleDuration = Duration(minutes: 5);
+  static const Duration _activityTouchInterval = Duration(seconds: 60);
+
+  final AuthService _authService = AuthService();
+
+  Timer? _idleTimer;
+  bool _isLoggingOut = false;
+  bool _isCheckingSession = false;
+  DateTime? _lastServerTouchAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    _resetIdleTimer();
+
+    // Cek session sekali saat app start/resume pertama kali.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkSessionFromServer(extendSession: false);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _idleTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('📱 AppLifecycleState: $state');
+
+    if (state == AppLifecycleState.resumed) {
+      // Saat app dibuka lagi, cek ke backend.
+      // Kalau backend bilang expired/logout, APK logout dan clear session.
+      _checkSessionFromServer(extendSession: false);
+    }
+
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached || state == AppLifecycleState.hidden) {
+      // Saat app masuk background/tutup normal:
+      // 1. Cek session ke backend
+      // 2. Setelah itu logout existing endpoint
+      _checkThenLogout(reason: 'App background / closed');
+    }
+  }
+
+  Future<bool> _hasLocalSession() async {
+    final session = await _authService.getSessionData();
+
+    final bprId = session['bpr_id']?.toString() ?? '';
+    final userId = session['user_id']?.toString() ?? '';
+    final token = session['session_token']?.toString() ?? session['login_session_token']?.toString() ?? session['token']?.toString() ?? '';
+
+    return bprId.isNotEmpty && userId.isNotEmpty && token.isNotEmpty;
+  }
+
+  void _resetIdleTimer() {
+    _idleTimer?.cancel();
+
+    _idleTimer = Timer(_idleDuration, () {
+      _checkThenLogout(reason: 'Idle 5 menit');
+    });
+  }
+
+  void _onUserActivity() {
+    _resetIdleTimer();
+
+    final now = DateTime.now();
+
+    // Jangan hit server setiap tap.
+    // Cukup maksimal 1x per 60 detik saat user aktif.
+    if (_lastServerTouchAt == null || now.difference(_lastServerTouchAt!) >= _activityTouchInterval) {
+      _lastServerTouchAt = now;
+
+      // User masih aktif, backend boleh memperpanjang login_expired_at.
+      _checkSessionFromServer(extendSession: true);
+    }
+  }
+
+  Future<void> _checkSessionFromServer({required bool extendSession}) async {
+    if (_isCheckingSession || _isLoggingOut) return;
+
+    final hasSession = await _hasLocalSession();
+    if (!hasSession) return;
+
+    _isCheckingSession = true;
+
+    try {
+      final result = await _authService.checkSessionTimeout(extendSession: extendSession);
+
+      final shouldLogout = result['should_logout'] == true;
+
+      if (shouldLogout) {
+        debugPrint('🔒 Server meminta logout: ${result['message']}');
+        await _logoutAndGoLogin(reason: result['reason']?.toString() ?? 'SESSION_INVALID');
+      }
+    } catch (e) {
+      debugPrint('❌ Check session error: $e');
+    } finally {
+      _isCheckingSession = false;
+    }
+  }
+
+  Future<void> _checkThenLogout({required String reason}) async {
+    if (_isLoggingOut) return;
+
+    final hasSession = await _hasLocalSession();
+    if (!hasSession) return;
+
+    try {
+      // Sesuai flow yang diminta:
+      // APK cek middleware session timeout dulu.
+      await _authService.checkSessionTimeout(extendSession: false);
+    } catch (e) {
+      debugPrint('❌ Check before logout error: $e');
+    }
+
+    await _logoutAndGoLogin(reason: reason);
+  }
+
+  Future<void> _logoutAndGoLogin({required String reason}) async {
+    if (_isLoggingOut) return;
+
+    _isLoggingOut = true;
+
+    try {
+      final session = await _authService.getSessionData();
+      final token = session['session_token']?.toString() ?? session['login_session_token']?.toString() ?? session['token']?.toString() ?? '';
+
+      if (token.isEmpty) {
+        debugPrint('🔒 Logout skipped: session kosong');
+        await _authService.clearSession();
+      } else {
+        debugPrint('🔒 Logout triggered: $reason');
+
+        // Hit endpoint logout existing dari Network/AuthService.
+        await _authService.logoutCurrentSession();
+      }
+    } catch (e) {
+      debugPrint('❌ Logout error: $e');
+
+      // Walaupun endpoint logout gagal, session lokal tetap wajib dibersihkan.
+      await _authService.clearSession();
+    } finally {
+      _idleTimer?.cancel();
+      _isLoggingOut = false;
+
+      final navigator = widget.navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginPage()), (route) => false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _onUserActivity(),
+      onPointerMove: (_) => _onUserActivity(),
+      onPointerSignal: (_) => _onUserActivity(),
+      child: widget.child,
+    );
+  }
+}

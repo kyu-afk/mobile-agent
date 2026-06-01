@@ -1,5 +1,6 @@
 // lib/services/auth_service.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -12,13 +13,23 @@ class AuthService {
   static const String _userIdKey = 'user_id';
   static const String _namaKey = 'nama';
   static const String _bprIdKey = 'bpr_id';
+  static const String _deviceIdKey = 'device_id';
+  static const String _sessionTokenKey = 'session_token';
 
   // ── LOGIN ──────────────────────────────────────────────────────────────────
   Future<LoginResponse> login({required String bprId, required String userId, required String password}) async {
+    final deviceId = await getOrCreateDeviceId();
+
     final response = await http.post(
       Uri.parse(NetworkUrl.login()),
       headers: NetworkUrl.jsonHeaders(),
-      body: jsonEncode({'bpr_id': bprId, 'user_id': userId.toUpperCase(), 'password': password}),
+      body: jsonEncode({
+        'bpr_id': bprId,
+        'user_id': userId.toUpperCase(),
+        'password': password,
+        'device_id': deviceId,
+        'device_name': 'Mobile Agent',
+      }),
     );
 
     final result = LoginResponse.fromJson(jsonDecode(response.body));
@@ -27,7 +38,18 @@ class AuthService {
       final resolvedUserId = result.user?.userId ?? userId.toUpperCase();
       final resolvedNama = result.user?.nama ?? userId.toUpperCase();
 
-      await _saveSession(token: result.token!, userId: resolvedUserId, nama: resolvedNama, bprId: bprId);
+      // Untuk sementara token login dipakai juga sebagai session_token.
+      // Idealnya backend login mengembalikan field login_session_token/session_token terpisah.
+      final sessionToken = result.token!;
+
+      await _saveSession(
+        token: result.token!,
+        userId: resolvedUserId,
+        nama: resolvedNama,
+        bprId: bprId,
+        deviceId: deviceId,
+        sessionToken: sessionToken,
+      );
 
       try {
         final fcmToken = await getFcmToken();
@@ -56,6 +78,22 @@ class AuthService {
     }
   }
 
+  Future<String> getOrCreateDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    const key = 'mobile_agent_device_id';
+    final existing = prefs.getString(key);
+
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+
+    final newDeviceId = 'MA-${DateTime.now().millisecondsSinceEpoch}';
+    await prefs.setString(key, newDeviceId);
+
+    return newDeviceId;
+  }
+
   Future<AuthResponse> updateFcmToken({required String bprId, required String userId, required String fcmToken}) async {
     final response = await http.post(
       Uri.parse(NetworkUrl.updateFcmToken()),
@@ -80,6 +118,91 @@ class AuthService {
     }
   }
 
+  Future<Map<String, dynamic>> checkSessionTimeout({bool extendSession = false}) async {
+    try {
+      final session = await getSessionData();
+
+      final bprId = session['bpr_id']?.toString() ?? '';
+      final userId = session['user_id']?.toString() ?? '';
+      final username = session['username']?.toString() ?? session['user_login']?.toString() ?? userId;
+
+      final deviceId = session['device_id']?.toString() ?? session['login_device_id']?.toString() ?? '';
+
+      final sessionToken = session['session_token']?.toString() ?? session['login_session_token']?.toString() ?? session['token']?.toString() ?? '';
+
+      if (bprId.isEmpty || username.isEmpty || deviceId.isEmpty || sessionToken.isEmpty) {
+        return {
+          'success': false,
+          'should_logout': true,
+          'message': 'Session lokal tidak lengkap. Silakan login kembali.',
+          'reason': 'LOCAL_SESSION_INCOMPLETE',
+        };
+      }
+
+      final payload = {
+        'user_id': 0,
+        'username': username,
+        'bpr_id': bprId,
+        'device_id': deviceId,
+        'session_token': sessionToken,
+        'extend_session': extendSession,
+      };
+
+      debugPrint('🧭 SESSION CHECK URL: ${NetworkUrl.sessionCheck()}');
+      debugPrint('🧭 SESSION CHECK BODY: ${jsonEncode(payload)}');
+
+      final response = await http.post(
+        Uri.parse(NetworkUrl.sessionCheck()),
+        headers: {'Content-Type': 'application/json', 'api-key': '123'},
+        body: jsonEncode(payload),
+      );
+
+      debugPrint('🧭 SESSION CHECK STATUS: ${response.statusCode}');
+      debugPrint('🧭 SESSION CHECK RESPONSE: ${response.body}');
+
+      if (response.statusCode != 200) {
+        return {'success': false, 'should_logout': false, 'message': 'HTTP ${response.statusCode}', 'reason': 'HTTP_ERROR'};
+      }
+
+      final jsonData = jsonDecode(response.body);
+      final data = jsonData['data'];
+
+      final code = jsonData['code']?.toString() ?? '';
+      final shouldLogout = data is Map ? data['should_logout'] == true : code == '401';
+
+      return {
+        'success': code == '000',
+        'should_logout': shouldLogout,
+        'message': jsonData['message']?.toString() ?? '',
+        'reason': data is Map ? data['reason']?.toString() ?? '' : '',
+        'data': data,
+      };
+    } catch (e) {
+      debugPrint('❌ checkSessionTimeout error: $e');
+
+      return {'success': false, 'should_logout': false, 'message': 'Gagal mengecek session: $e', 'reason': 'EXCEPTION'};
+    }
+  }
+
+  Future<AuthResponse> logoutCurrentSession() async {
+    final session = await getSessionData();
+
+    final bprId = session['bpr_id']?.toString() ?? '';
+    final userId = session['user_id']?.toString() ?? session['username']?.toString() ?? session['user_login']?.toString() ?? '';
+
+    if (bprId.isEmpty || userId.isEmpty) {
+      await clearSession();
+
+      return const AuthResponse(code: '000', status: 'success', message: 'Session lokal dibersihkan');
+    }
+
+    final result = await logout(bprId: bprId, userId: userId);
+
+    await clearSession();
+
+    return result;
+  }
+
   // ── GANTI PASSWORD ─────────────────────────────────────────────────────────
   Future<AuthResponse> changePassword({
     required String bprId,
@@ -96,20 +219,33 @@ class AuthService {
   }
 
   // ── SESSION ────────────────────────────────────────────────────────────────
-  Future<void> _saveSession({required String token, required String userId, required String nama, required String bprId}) async {
+  Future<void> _saveSession({
+    required String token,
+    required String userId,
+    required String nama,
+    required String bprId,
+    required String deviceId,
+    required String sessionToken,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
+
     await prefs.setString(_tokenKey, token);
     await prefs.setString(_userIdKey, userId);
     await prefs.setString(_namaKey, nama);
     await prefs.setString(_bprIdKey, bprId);
+    await prefs.setString(_deviceIdKey, deviceId);
+    await prefs.setString(_sessionTokenKey, sessionToken);
   }
 
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
+
     await prefs.remove(_tokenKey);
     await prefs.remove(_userIdKey);
     await prefs.remove(_namaKey);
     await prefs.remove(_bprIdKey);
+    await prefs.remove(_deviceIdKey);
+    await prefs.remove(_sessionTokenKey);
   }
 
   Future<String?> getToken() async {
@@ -119,11 +255,15 @@ class AuthService {
 
   Future<Map<String, String>> getSessionData() async {
     final prefs = await SharedPreferences.getInstance();
+
     return {
       'token': prefs.getString(_tokenKey) ?? '',
+      'session_token': prefs.getString(_sessionTokenKey) ?? '',
       'user_id': prefs.getString(_userIdKey) ?? '',
+      'username': prefs.getString(_userIdKey) ?? '',
       'nama': prefs.getString(_namaKey) ?? '',
       'bpr_id': prefs.getString(_bprIdKey) ?? '',
+      'device_id': prefs.getString(_deviceIdKey) ?? '',
     };
   }
 }
