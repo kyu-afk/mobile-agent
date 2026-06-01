@@ -55,7 +55,7 @@ class AuthService {
         final fcmToken = await getFcmToken();
 
         if (fcmToken.isNotEmpty) {
-          await updateFcmToken(bprId: bprId, userId: resolvedUserId, fcmToken: fcmToken);
+          await updateFcmToken(bprId: bprId, noCif: resolvedUserId, username: resolvedUserId, fcmToken: fcmToken);
         }
       } catch (_) {
         // Login tetap sukses walaupun update FCM token gagal.
@@ -94,11 +94,16 @@ class AuthService {
     return newDeviceId;
   }
 
-  Future<AuthResponse> updateFcmToken({required String bprId, required String userId, required String fcmToken}) async {
+  Future<AuthResponse> updateFcmToken({required String bprId, required String noCif, required String username, required String fcmToken}) async {
+    final payload = {'bpr_id': bprId, 'no_cif': noCif.trim(), 'username': username.trim().toUpperCase(), 'fcm_token': fcmToken.trim()};
+
+    debugPrint('🔥 UPDATE FCM URL: ${NetworkUrl.updateFcmToken()}');
+    debugPrint('🔥 UPDATE FCM PAYLOAD: ${jsonEncode(payload)}');
+
     final response = await http.post(
       Uri.parse(NetworkUrl.updateFcmToken()),
-      headers: NetworkUrl.jsonHeaders(),
-      body: jsonEncode({'bpr_id': bprId, 'user_id': userId.toUpperCase(), 'fcm_token': fcmToken}),
+      headers: {'Content-Type': 'application/json', 'api-key': NetworkUrl.apiKey, 'X-API-Key': NetworkUrl.apiKey},
+      body: jsonEncode(payload),
     );
 
     return AuthResponse.fromJson(jsonDecode(response.body));
