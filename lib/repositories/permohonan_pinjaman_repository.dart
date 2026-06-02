@@ -82,7 +82,26 @@ class PengajuanRepository {
 
   Future<List<PengajuanModel>> getPengajuan() async {
     final allData = await _getAllPengajuan();
-    return allData.where((item) => item.status == '1').toList();
+    final roleUser = await _getRoleUser();
+
+    return allData.where((item) {
+      final status = item.status.toString().trim();
+
+      // Pejabat / role_user 1:
+      // tampilkan permohonan baru dan yang sedang proses
+      if (roleUser == '1') {
+        return status == '0' || status == '1';
+      }
+
+      // Petugas / role_user 2:
+      // hanya tampilkan yang sudah masuk proses / ditugaskan
+      if (roleUser == '2') {
+        return status == '1';
+      }
+
+      // fallback aman
+      return status == '1';
+    }).toList();
   }
 
   Future<List<PengajuanModel>> getHistori() async {
