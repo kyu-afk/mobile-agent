@@ -13,6 +13,29 @@ class PengajuanRepository {
     return prefs.getString('user_id') ?? '';
   }
 
+  Future<String> _getRoleUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('role_user') ?? '';
+  }
+
+  Future<String> _getUserHandleForInquiry() async {
+    final userHandle = await _getUserHandle();
+    final roleUser = await _getRoleUser();
+
+    // role_user 1 = pejabat, lihat semua permohonan
+    if (roleUser == '1') {
+      return '';
+    }
+
+    // role_user 2 = petugas, filter sesuai user_handle login
+    if (roleUser == '2') {
+      return userHandle;
+    }
+
+    // fallback paling aman: filter by user sendiri
+    return userHandle;
+  }
+
   Future<String> _getBprId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('bpr_id') ?? '609999';
@@ -20,7 +43,7 @@ class PengajuanRepository {
 
   Future<List<PengajuanModel>> _getAllPengajuan() async {
     try {
-      final userHandle = await _getUserHandle();
+      final userHandle = await _getUserHandleForInquiry();
       final bprId = await _getBprId();
 
       final requestBody = {
@@ -38,10 +61,7 @@ class PengajuanRepository {
         'sort': {'by': 'created_at', 'order': 'desc'},
       };
 
-      final response = await TokenInterceptor.post(
-        Uri.parse(NetworkUrl.getPengajuan()),
-        body: jsonEncode(requestBody),
-      );
+      final response = await TokenInterceptor.post(Uri.parse(NetworkUrl.getPengajuan()), body: jsonEncode(requestBody));
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
@@ -74,17 +94,9 @@ class PengajuanRepository {
     try {
       final bprId = await _getBprId();
 
-      final requestBody = {
-        'bpr_id': bprId,
-        'user_login': 'system',
-        'term': 'WEB',
-      };
+      final requestBody = {'bpr_id': bprId, 'user_login': 'system', 'term': 'WEB'};
 
-      final response = await http.post(
-        Uri.parse(NetworkUrl.getJaminanAll()),
-        headers: NetworkUrl.jsonHeaders(),
-        body: jsonEncode(requestBody),
-      );
+      final response = await http.post(Uri.parse(NetworkUrl.getJaminanAll()), headers: NetworkUrl.jsonHeaders(), body: jsonEncode(requestBody));
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
@@ -101,16 +113,9 @@ class PengajuanRepository {
 
   Future<String?> getBprLogoFilename(String bprId) async {
     try {
-      final requestBody = {
-        'action': 'detail',
-        'bpr_id': bprId,
-      };
+      final requestBody = {'action': 'detail', 'bpr_id': bprId};
 
-      final response = await http.post(
-        Uri.parse(NetworkUrl.getBprProfile()),
-        headers: NetworkUrl.jsonHeaders(),
-        body: jsonEncode(requestBody),
-      );
+      final response = await http.post(Uri.parse(NetworkUrl.getBprProfile()), headers: NetworkUrl.jsonHeaders(), body: jsonEncode(requestBody));
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
@@ -147,10 +152,7 @@ class PengajuanRepository {
         'tgl_keputusan': tglKeputusan,
       };
 
-      final response = await TokenInterceptor.post(
-        Uri.parse(NetworkUrl.updateStatus()),
-        body: jsonEncode(requestBody),
-      );
+      final response = await TokenInterceptor.post(Uri.parse(NetworkUrl.updateStatus()), body: jsonEncode(requestBody));
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);

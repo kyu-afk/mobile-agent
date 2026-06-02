@@ -15,6 +15,9 @@ class AuthService {
   static const String _bprIdKey = 'bpr_id';
   static const String _deviceIdKey = 'device_id';
   static const String _sessionTokenKey = 'session_token';
+  static const String _noCifKey = 'no_cif';
+  static const String _roleUserKey = 'role_user';
+  static const String _jabatanKey = 'jabatan';
 
   // ── LOGIN ──────────────────────────────────────────────────────────────────
   Future<LoginResponse> login({required String bprId, required String userId, required String password}) async {
@@ -36,19 +39,24 @@ class AuthService {
 
     if (result.isSuccess && result.token != null) {
       final resolvedUserId = result.user?.userId ?? userId.toUpperCase();
+      final resolvedNoCif = result.user?.noCif ?? resolvedUserId;
       final resolvedNama = result.user?.nama ?? userId.toUpperCase();
+      final resolvedBprId = result.user?.bprId ?? bprId;
+      final resolvedRoleUser = result.user?.roleUser ?? '';
+      final resolvedJabatan = result.user?.jabatan ?? '';
 
-      // Untuk sementara token login dipakai juga sebagai session_token.
-      // Idealnya backend login mengembalikan field login_session_token/session_token terpisah.
       final sessionToken = result.token!;
 
       await _saveSession(
         token: result.token!,
         userId: resolvedUserId,
+        noCif: resolvedNoCif,
         nama: resolvedNama,
-        bprId: bprId,
+        bprId: resolvedBprId,
         deviceId: deviceId,
         sessionToken: sessionToken,
+        roleUser: resolvedRoleUser,
+        jabatan: resolvedJabatan,
       );
 
       try {
@@ -227,19 +235,27 @@ class AuthService {
   Future<void> _saveSession({
     required String token,
     required String userId,
+    required String noCif,
     required String nama,
     required String bprId,
     required String deviceId,
     required String sessionToken,
+    required String roleUser,
+    required String jabatan,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(_tokenKey, token);
     await prefs.setString(_userIdKey, userId);
+    await prefs.setString(_noCifKey, noCif);
     await prefs.setString(_namaKey, nama);
     await prefs.setString(_bprIdKey, bprId);
     await prefs.setString(_deviceIdKey, deviceId);
     await prefs.setString(_sessionTokenKey, sessionToken);
+    await prefs.setString(_roleUserKey, roleUser);
+    await prefs.setString(_jabatanKey, jabatan);
+
+    debugPrint('✅ SESSION SAVED: user_id=$userId, role_user=$roleUser, jabatan=$jabatan');
   }
 
   Future<void> clearSession() async {
@@ -247,10 +263,13 @@ class AuthService {
 
     await prefs.remove(_tokenKey);
     await prefs.remove(_userIdKey);
+    await prefs.remove(_noCifKey);
     await prefs.remove(_namaKey);
     await prefs.remove(_bprIdKey);
     await prefs.remove(_deviceIdKey);
     await prefs.remove(_sessionTokenKey);
+    await prefs.remove(_roleUserKey);
+    await prefs.remove(_jabatanKey);
   }
 
   Future<String?> getToken() async {
@@ -266,9 +285,12 @@ class AuthService {
       'session_token': prefs.getString(_sessionTokenKey) ?? '',
       'user_id': prefs.getString(_userIdKey) ?? '',
       'username': prefs.getString(_userIdKey) ?? '',
+      'no_cif': prefs.getString(_noCifKey) ?? '',
       'nama': prefs.getString(_namaKey) ?? '',
       'bpr_id': prefs.getString(_bprIdKey) ?? '',
       'device_id': prefs.getString(_deviceIdKey) ?? '',
+      'role_user': prefs.getString(_roleUserKey) ?? '',
+      'jabatan': prefs.getString(_jabatanKey) ?? '',
     };
   }
 }

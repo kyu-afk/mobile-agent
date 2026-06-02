@@ -8,11 +8,7 @@ class DetailPermohonanPage extends StatefulWidget {
   final PengajuanModel data;
   final PengajuanNotifier notifier;
 
-  const DetailPermohonanPage({
-    super.key,
-    required this.data,
-    required this.notifier,
-  });
+  const DetailPermohonanPage({super.key, required this.data, required this.notifier});
 
   @override
   State<DetailPermohonanPage> createState() => _DetailPermohonanPageState();
@@ -51,27 +47,41 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
             _buildSectionTitle('Data Pemohon'),
             const SizedBox(height: 6),
             _buildInfoCard([
+              _detailRow('No CIF', widget.data.noCif.isNotEmpty ? widget.data.noCif : '-'),
               _detailRow('No ID (KTP)', widget.data.noId),
               _detailRow('Nama Lengkap', widget.data.nama),
               _detailRow('No HP', widget.data.noHp),
               _detailRow('Alamat', widget.data.alamat),
             ]),
             const SizedBox(height: 16),
-            
+
+            // Data Jaminan
+            _buildSectionTitle('Data Jaminan'),
+            const SizedBox(height: 6),
+            _buildInfoCard([_detailRow('Jenis Jaminan', widget.notifier.getNamaJaminan(widget.data.kdJaminan)), _buildFotoJaminan()]),
+            const SizedBox(height: 16),
+
             // Data Pinjaman
             _buildSectionTitle('Data Pinjaman'),
             const SizedBox(height: 6),
             _buildInfoCard([
-              _detailRow('Nilai Pinjaman', _formatRupiah(widget.data.nilaiPinjaman)),
+              _detailRow('Nominal', _formatRupiah(widget.data.nilaiPinjaman)),
               _detailRow('Jangka Waktu', '${widget.data.jkWaktu} bulan'),
-              _detailRow('Rate', '${widget.data.rate}%'),
+              _detailRow('Suku Bunga', '${widget.data.rate}%'),
+              _detailRow('Cicilan', _formatRupiah(widget.data.cicilanPerbulan)),
               _detailRow('Tanggal Pengajuan', _formatDate(widget.data.tglinput)),
-              _detailRow('Tanggal Proses', _formatDate(widget.data.tglproses)),
-              _detailRow('Tanggal Keputusan', _formatDate(widget.data.tglkeputusan)),
-              _detailRow('status', widget.data.status == '1' ? 'Proses' : widget.data.status == '2' ? 'Disetujui' : 'Ditolak'),
-              // _detailRow('User Handle', widget.data.userHandle),
+
+              if (widget.data.userHandle.isNotEmpty) _detailRow('User Handle', widget.data.userHandle),
+
+              if (widget.data.tglproses.isNotEmpty) _detailRow('Tanggal Proses', _formatDate(widget.data.tglproses)),
+
+              if (widget.data.tglkeputusan.isNotEmpty) _detailRow('Tanggal Keputusan', _formatDate(widget.data.tglkeputusan)),
+
+              _detailRow('Status', _getStatusText(widget.data.status)),
+
               if (widget.data.alasan.isNotEmpty) _detailRow('Alasan', widget.data.alasan),
             ]),
+            const SizedBox(height: 16),
             const SizedBox(height: 16),
 
             // Data Jaminan
@@ -79,49 +89,49 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
             const SizedBox(height: 6),
             _buildInfoCard([
               _detailRow('Jenis Jaminan', widget.notifier.getNamaJaminan(widget.data.kdJaminan)),
-              _buildFotoJaminan(),  // ← Foto jaminan dalam satu baris
+              _buildFotoJaminan(), // ← Foto jaminan dalam satu baris
             ]),
             const SizedBox(height: 16),
-            
+
             // Tanggal Keputusan
             _buildTanggalKeputusan(),
             const SizedBox(height: 16),
-            
+
             // Update Status
             if (!isProcessed) ...[
-            _buildSectionTitle('Update Status'),
-            const SizedBox(height: 10),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _showConfirmDialog('SETUJU', '2', 'Apakah Anda yakin ingin menyetujui pengajuan ini?'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              _buildSectionTitle('Update Status'),
+              const SizedBox(height: 10),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _showConfirmDialog('SETUJU', '2', 'Apakah Anda yakin ingin menyetujui pengajuan ini?'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('SETUJU', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     ),
-                    child: const Text('SETUJU', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _showAlasanDialog(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _showAlasanDialog(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('TOLAK', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     ),
-                    child: const Text('TOLAK', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                ],
+              ),
+              const SizedBox(height: 16),
             ],
           ],
         ),
@@ -132,7 +142,7 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
   // ========== WIDGET FOTO JAMINAN (TANPA CONTAINER LUAR) ==========
   Widget _buildFotoJaminan() {
     final fhotoJaminan = widget.data.fhotojaminan;
-    
+
     // Jika tidak ada foto atau string kosong
     if (fhotoJaminan == null || fhotoJaminan.isEmpty) {
       return Padding(
@@ -151,28 +161,23 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
             Container(
               width: 60,
               height: 60,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Center(
-                child: Icon(Icons.image_not_supported, size: 24, color: Colors.grey),
-              ),
+              decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
+              child: const Center(child: Icon(Icons.image_not_supported, size: 24, color: Colors.grey)),
             ),
           ],
         ),
       );
     }
-    
+
     // Coba decode base64
     try {
       String base64String = fhotoJaminan;
       if (base64String.contains(',')) {
         base64String = base64String.split(',').last;
       }
-      
+
       final bytes = base64Decode(base64String);
-      
+
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
@@ -223,10 +228,7 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
             Container(
               width: 60,
               height: 60,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(6),
-              ),
+              decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
               child: const Icon(Icons.error_outline, size: 24, color: Colors.grey),
             ),
           ],
@@ -272,100 +274,106 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            ),
+            child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTanggalKeputusan() {
-  final bool isProcessed = widget.data.status == '2' || widget.data.status == '3';
-  
-  // Jika status sudah diproses (2/3), jangan tampilkan sama sekali
-  if (isProcessed) {
-    return const SizedBox.shrink();  // Tidak menampilkan apa-apa
+  String _getStatusText(String status) {
+    switch (status.trim()) {
+      case '0':
+        return 'Belum Diproses';
+      case '1':
+        return 'Proses';
+      case '2':
+        return 'Disetujui';
+      case '3':
+        return 'Ditolak';
+      default:
+        return '-';
+    }
   }
-  
-  return Container(
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: Colors.grey.shade100,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.grey.shade300),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Tanggal Keputusan',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xff0F3D2E)),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: selectedDate,
-              firstDate: tanggalPengajuan,
-              lastDate: today,
-              builder: (context, child) => Theme(
-                data: Theme.of(context).copyWith(
-                  colorScheme: const ColorScheme.light(primary: Color(0xff0F3D2E), onPrimary: Colors.white),
-                ),
-                child: child!,
-              ),
-            );
-            if (picked != null && picked != selectedDate) {
-              setState(() {
-                selectedDate = picked;
-              });
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xff0F3D2E).withOpacity(0.5)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.event, size: 16, color: const Color(0xff0F3D2E)),
-                    const SizedBox(width: 6),
-                    Text(
-                      _formatDateOnly(selectedDate),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xff0F3D2E).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+
+  Widget _buildTanggalKeputusan() {
+    final bool isProcessed = widget.data.status == '2' || widget.data.status == '3';
+
+    // Jika status sudah diproses (2/3), jangan tampilkan sama sekali
+    if (isProcessed) {
+      return const SizedBox.shrink(); // Tidak menampilkan apa-apa
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tanggal Keputusan',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xff0F3D2E)),
+          ),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: selectedDate,
+                firstDate: tanggalPengajuan,
+                lastDate: today,
+                builder: (context, child) => Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(primary: Color(0xff0F3D2E), onPrimary: Colors.white),
                   ),
-                  child: const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xff0F3D2E)),
+                  child: child!,
                 ),
-              ],
+              );
+              if (picked != null && picked != selectedDate) {
+                setState(() {
+                  selectedDate = picked;
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xff0F3D2E).withOpacity(0.5)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.event, size: 16, color: const Color(0xff0F3D2E)),
+                      const SizedBox(width: 6),
+                      Text(_formatDateOnly(selectedDate), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xff0F3D2E).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xff0F3D2E)),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Min: ${_formatDateOnly(tanggalPengajuan)} | Max: ${_formatDateOnly(today)}',
-          style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(height: 4),
+          Text(
+            'Min: ${_formatDateOnly(tanggalPengajuan)} | Max: ${_formatDateOnly(today)}',
+            style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showConfirmDialog(String action, String status, String message) {
     showDialog(
@@ -375,11 +383,7 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Row(
           children: [
-            Icon(
-              status == '2' ? Icons.check_circle : Icons.cancel,
-              color: status == '2' ? Colors.green : Colors.red,
-              size: 24,
-            ),
+            Icon(status == '2' ? Icons.check_circle : Icons.cancel, color: status == '2' ? Colors.green : Colors.red, size: 24),
             const SizedBox(width: 8),
             Text('Konfirmasi $action', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
@@ -405,10 +409,7 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
                 _showResultDialog(success, action);
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: status == '2' ? Colors.green : Colors.red,
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: status == '2' ? Colors.green : Colors.red, foregroundColor: Colors.white),
             child: Text('Ya, $action', style: const TextStyle(fontSize: 13)),
           ),
         ],
@@ -455,10 +456,7 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(success ? 'Berhasil' : 'Gagal', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Text(
-          success ? 'Pengajuan berhasil di$action' : 'Gagal mengupdate status. Silakan coba lagi.',
-          style: const TextStyle(fontSize: 13),
-        ),
+        content: Text(success ? 'Pengajuan berhasil di$action' : 'Gagal mengupdate status. Silakan coba lagi.', style: const TextStyle(fontSize: 13)),
         actions: [
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
@@ -494,13 +492,19 @@ class _DetailPermohonanPageState extends State<DetailPermohonanPage> {
   }
 
   String _formatRupiah(String value) {
-    if (value.isEmpty) return 'Rp 0';
+    final raw = value.toString().trim();
+
+    if (raw.isEmpty || raw == '-' || raw.toLowerCase() == 'null') {
+      return 'Rp 0';
+    }
+
     try {
-      final number = int.parse(value);
-      return 'Rp ${number.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+      final number = double.tryParse(raw) ?? 0;
+      final intValue = number.round();
+
+      return 'Rp ${intValue.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
     } catch (e) {
-      return 'Rp $value';
+      return 'Rp $raw';
     }
   }
 }
-

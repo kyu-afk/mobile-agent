@@ -26,11 +26,43 @@ class PengajuanNotifier extends ChangeNotifier {
 
   Future<void> loadMasterJaminan() async {
     final jaminanList = await _repository.getAllJaminan();
+
+    _jaminanMap.clear();
+
     for (var j in jaminanList) {
-      if (j.status == 'A') {
-        _jaminanMap[j.kdJaminan] = j.deskripsi;
+      final kode = j.kdJaminan.toString().trim();
+      final deskripsi = j.deskripsi.toString().trim();
+      final status = j.status.toString().trim().toUpperCase();
+
+      if (kode.isEmpty || deskripsi.isEmpty) continue;
+
+      // Jangan terlalu ketat hanya status == A,
+      // karena beberapa backend bisa kirim status kosong / Aktif / 1.
+      if (status.isEmpty || status == 'A' || status == 'AKTIF' || status == 'ACTIVE' || status == '1') {
+        _jaminanMap[kode] = deskripsi;
+        _jaminanMap[kode.toUpperCase()] = deskripsi;
       }
     }
+
+    debugPrint('✅ Master jaminan loaded: ${_jaminanMap.length}');
+  }
+
+  String getNamaJaminan(String kdJaminan) {
+    final kode = kdJaminan.toString().trim();
+
+    if (kode.isEmpty || kode == '-' || kode.toLowerCase() == 'null') {
+      return '-';
+    }
+
+    final direct = _jaminanMap[kode];
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final upper = _jaminanMap[kode.toUpperCase()];
+    if (upper != null && upper.isNotEmpty) return upper;
+
+    // Fallback: tampilkan kode agar user tetap tahu data dari API ada,
+    // bukan kosong.
+    return kode;
   }
 
   Future<void> loadPengajuan() async {
@@ -65,11 +97,6 @@ class PengajuanNotifier extends ChangeNotifier {
     }
   }
 
-  String getNamaJaminan(String kdJaminan) {
-    if (kdJaminan.isEmpty) return 'Tidak ada jaminan';
-    return _jaminanMap[kdJaminan] ?? 'Kode: $kdJaminan (tidak dikenal)';
-  }
-
   Future<bool> updateStatus({
     required String noId,
     required String noHp,
@@ -80,13 +107,7 @@ class PengajuanNotifier extends ChangeNotifier {
     _isUpdating = true;
     notifyListeners();
 
-    final success = await _repository.updateStatus(
-      noId: noId,
-      noHp: noHp,
-      status: status,
-      alasan: alasan,
-      tglKeputusan: tglKeputusan,
-    );
+    final success = await _repository.updateStatus(noId: noId, noHp: noHp, status: status, alasan: alasan, tglKeputusan: tglKeputusan);
 
     if (success) {
       await loadPengajuan();

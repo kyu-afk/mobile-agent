@@ -1,6 +1,6 @@
 // lib/services/session_guard.dart
 import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../pages/login_page.dart';
@@ -34,9 +34,10 @@ class _SessionGuardState extends State<SessionGuard> with WidgetsBindingObserver
 
     _resetIdleTimer();
 
-    // Cek session sekali saat app start/resume pertama kali.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkSessionFromServer(extendSession: false);
+      if (!kIsWeb) {
+        _checkSessionFromServer(extendSession: false);
+      }
     });
   }
 
@@ -52,15 +53,17 @@ class _SessionGuardState extends State<SessionGuard> with WidgetsBindingObserver
     debugPrint('📱 AppLifecycleState: $state');
 
     if (state == AppLifecycleState.resumed) {
-      // Saat app dibuka lagi, cek ke backend.
-      // Kalau backend bilang expired/logout, APK logout dan clear session.
       _checkSessionFromServer(extendSession: false);
+      return;
     }
 
+    if (kIsWeb) {
+      debugPrint('🌐 Web lifecycle ignored for auto logout: $state');
+      return;
+    }
+
+    // Khusus APK/mobile native, background/closed tetap logout.
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached || state == AppLifecycleState.hidden) {
-      // Saat app masuk background/tutup normal:
-      // 1. Cek session ke backend
-      // 2. Setelah itu logout existing endpoint
       _checkThenLogout(reason: 'App background / closed');
     }
   }
@@ -93,8 +96,9 @@ class _SessionGuardState extends State<SessionGuard> with WidgetsBindingObserver
     if (_lastServerTouchAt == null || now.difference(_lastServerTouchAt!) >= _activityTouchInterval) {
       _lastServerTouchAt = now;
 
-      // User masih aktif, backend boleh memperpanjang login_expired_at.
-      _checkSessionFromServer(extendSession: true);
+      if (!kIsWeb) {
+        _checkSessionFromServer(extendSession: true);
+      }
     }
   }
 
